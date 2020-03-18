@@ -1,11 +1,11 @@
 import cv2 as cv
 import numpy as np
-from scipy import stats as st
 from BannerReplacer import BannerReplacer
 import yaml
 import math
 from banner_parameters_setting import banner_parameters_setting
 from sklearn import metrics
+import pandas as pd
 
 
 class OpenCVLogoInsertion(BannerReplacer):
@@ -125,7 +125,7 @@ class OpenCVLogoInsertion(BannerReplacer):
         self.diagonal_coordinates_list = [x_top_left, x_bot_right, y_top_left, y_bot_right]
         return self.diagonal_coordinates_list
 
-    def __find_contour_coordinates(self, cr_frame, area_threshold, centroid_bias, y_coefficient):
+    def __find_contour_coordinates(self, cr_frame, area_threshold, centroid_bias, y_coefficient, corners, preprocessed):
         """
         The method provides detection of the contour corners coordinates
 
@@ -157,6 +157,7 @@ class OpenCVLogoInsertion(BannerReplacer):
 
         coordinates_array = []
         for cnt in self.contours:
+            # cv.drawContours(cr_frame, [cnt], 0, (0, 255, 0), -1)
             x_top_left, x_bot_right, y_top_left, y_bot_right = self.__find_diagonal_contour_coordinates(cnt)
             coordinates_array.append([x_top_left, x_bot_right, y_top_left, y_bot_right])
 
@@ -174,31 +175,36 @@ class OpenCVLogoInsertion(BannerReplacer):
         top_right = [x_bot_right, y_top_right]
         self.corners = [top_left, bot_left, bot_right, top_right]
 
-        banner_mask_cr = cr_frame.copy()
-        pts = np.array(self.corners, np.int32)
+        banner_mask_cr = self.frame.copy()
+
+        if preprocessed:
+            pts = np.array(corners, dtype=np.int32)
+        else:
+            pts = np.array(self.corners, dtype=np.int32)
         cv.fillPoly(banner_mask_cr, [pts], (0, 0, 255), lineType=cv.LINE_AA)
         color_adj_field = cr_frame[y_top_left:y_bot_right, x_top_left:x_bot_right]
         return banner_mask_cr, color_adj_field
 
-    def __adjust_referee_colors(self, hsv_referee, area_threshold, frame_hsv,
-                                banner_mask_cr, coef, hsv_body, hsv_flag):
+    def __adjust_referee_colors(self, hsv_referee, area_threshold, banner_mask_cr,
+                                coef, hsv_body, hsv_flag):
         """
         The method provides referee colors adjustment for flowing around the detected banner
 
         :param hsv_referee: h, s, v parameters for referee object
         :param area_threshold: the threshold for the contours area
-        :param frame_hsv: transformed frame to the HSV mode
         :param banner_mask_cr: banner mask
         :param coef: coefficients for referee object tuning
         :param hsv_body: h, s, v parameters for referee's body
         :param hsv_flag: h, s, v parameters for flag
         :return:
         """
+        copy = self.frame.copy()
+        copy = cv.cvtColor(copy, cv.COLOR_BGR2HSV)
         low_ref = np.array([hsv_referee['low_h'], 0, hsv_referee['low_v']])
         high_ref = np.array([hsv_referee['high_h'], 255, hsv_referee['high_v']])
-        referee_mask = cv.inRange(frame_hsv, low_ref, high_ref)
-
+        referee_mask = cv.inRange(copy, low_ref, high_ref)
         _, contours, _ = cv.findContours(referee_mask, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
+
         for cnt in contours:
             area = cv.contourArea(cnt)
             if area > area_threshold[0]:
@@ -210,7 +216,7 @@ class OpenCVLogoInsertion(BannerReplacer):
                 cl = cnt[:, 0, 1].min()  # Y coordinate for top left corner
                 dl = cnt[:, 0, 1].max()  # Y coordinate for bottom right corner
 
-                ref_cr_hsv = frame_hsv[int(cl * coef['1']):int(dl * coef['2']), int(al * coef['3']):int(bl * coef['4'])]
+                ref_cr_hsv = banner_mask_cr[int(cl * coef['1']):int(dl * coef['2']), int(al * coef['3']):int(bl * coef['4'])]
                 banner_mask_cr_ref = banner_mask_cr[int(cl * coef['1']):int(dl * coef['2']),
                                                     int(al * coef['3']):int(bl * coef['4'])]
 
@@ -230,7 +236,7 @@ class OpenCVLogoInsertion(BannerReplacer):
         # flag color
         low_flg = np.array([hsv_flag['h'][0], hsv_flag['s'][0], hsv_flag['v'][0]])
         high_flg = np.array([hsv_flag['h'][1], hsv_flag['s'][1], hsv_flag['v'][1]])
-        flag_mask = cv.inRange(frame_hsv, low_flg, high_flg)
+        flag_mask = cv.inRange(copy, low_flg, high_flg)
 
         _, contours, _ = cv.findContours(flag_mask, cv.RETR_TREE,
                                          cv.CHAIN_APPROX_SIMPLE)
@@ -271,30 +277,28 @@ class OpenCVLogoInsertion(BannerReplacer):
         else:
             self.f1_score = -1
 
-    def __resize_banner(self, min_max, w_threshold, w_ratio):
+    def __transform_banner(self, corners, w_ratio, w_threshold):
         """
         The method provides banner resizing
 
-        :param min_max: cropped frame corners coordinates
-        :param w_threshold: frame width threshold
-        :param w_ratio: height and width ratio
+        :param corners: smoothed corners coordinates
         :return: resized banner
         """
-        top_left, bot_left, bot_right, top_right = self.corners
+        top_left, bot_left, bot_right, top_right = corners
 
-        w = bot_right[0] - top_left[0]
-        h = bot_right[1] - top_left[1]
+        frame_h, frame_w, _ = self.frame.shape
+        logo_h, logo_w, _ = self.logo.shape
 
-        if (bot_right[0] + min_max[0]) >= w_threshold * (self.frame.shape[1] - 1):
-            w = math.ceil(h * w_ratio)
-
-        resized_banner = cv.resize(self.logo, (w, h))
-        rtx = [bot_right[0], top_left[1]]
-        lbx = [top_left[0], bot_right[1]]
-        pts1 = np.float32([[top_left, rtx, bot_right, lbx]])
+        pts1 = np.float32([[[0, 0], [logo_w - 1, 0], [logo_w - 1, logo_h - 1], [0, logo_h - 1]]])
         pts2 = np.float32([[top_left, top_right, bot_right, bot_left]])
+        if bot_right[0] >= frame_w * w_threshold:
+            new_x = abs(top_left[1] - bot_right[1]) * w_ratio + top_left[0]
+            pts2 = np.float32([[top_left, [new_x, top_right[1]], [new_x, bot_right[1]], bot_left]])
+        else:
+            pass
+
         matrix = cv.getPerspectiveTransform(pts1, pts2)
-        resized_banner = cv.warpPerspective(resized_banner, matrix, (w, h), borderMode=1)
+        resized_banner = cv.warpPerspective(self.logo, matrix, (frame_w, frame_h), borderMode=1)
         resized_banner = cv.GaussianBlur(resized_banner, (1, 1), cv.BORDER_DEFAULT)
         return resized_banner
 
@@ -309,11 +313,12 @@ class OpenCVLogoInsertion(BannerReplacer):
             self.template_p = yaml.safe_load(stream)
         stream.close()
 
-    def detect_banner(self, f_name):
+    def detect_banner(self, f_name, corners):
         """
         The method provides detection of the required field and prepares it for replacement
 
         :param f_name: frame name
+        :param corners: smoothed corners coordinates
         :return: cropped field, resized banner, copy of cropped field, switch
         """
         parameter = self.template_p
@@ -331,57 +336,69 @@ class OpenCVLogoInsertion(BannerReplacer):
             banner_mask_cr, color_adjustment_field = self.__find_contour_coordinates(cr_frame,
                                                                                      parameter['cnt_area_threshold'],
                                                                                      parameter['centroid_bias'],
-                                                                                     parameter['y_coefficient'])
+                                                                                     parameter['y_coefficient'],
+                                                                                     corners, False)
 
             self.__adjust_logo_color(color_adjustment_field)
 
-            self.__adjust_referee_colors(parameter['hsv_referee'], parameter['area_threshold'], frame_hsv,
+            self.__adjust_referee_colors(parameter['hsv_referee'], parameter['area_threshold'],
                                          banner_mask_cr, parameter['coef'], parameter['hsv_body'],
                                          parameter['hsv_flag'])
 
-            resized_banner = self.__resize_banner(min_max, parameter['w_threshold'], parameter['w_ratio'])
+            transformed_banner = self.__transform_banner(corners, parameter['w_ratio'], parameter['w_threshold'])
 
             if f_name is None:
                 pass
             else:
                 self.__performance_evaluation(banner_mask_cr, f_name, min_max)
 
-            return cr_frame, resized_banner, banner_mask_cr, switch, self.f1_score
+            return cr_frame, transformed_banner, banner_mask_cr, switch, self.f1_score
         else:
             return 0, 0, 0, switch, -1
 
-    def insert_logo(self, cr_frame, resized_banner, banner_mask_cr, switch):
+    def insert_logo(self, resized_banner, banner_mask_cr):
         """
         The method provides insertion of the required logo into the prepared field
 
-        :param cr_frame: cropped field of frame
         :param resized_banner: resized banner
         :param banner_mask_cr: copy of cropped frame
-        :param switch: indicates whether the required field was found or not
         :return:
         """
-        if switch:
-            top_left, bot_left, bot_right, top_right = self.corners
+        for i in range(self.frame.shape[0]):
+            for j in range(self.frame.shape[1]):
+                if list(banner_mask_cr[i, j]) == [0, 0, 255]:
+                    self.frame[i, j] = resized_banner[i, j]
+                else:
+                    continue
 
-            for i in range(top_left[1], bot_right[1]):
-                for j in range(top_left[0], bot_right[0]):
-                    if list(banner_mask_cr[i, j]) == [0, 0, 255]:
-                        cr_frame[i, j] = resized_banner[i - top_left[1], j - top_left[0]]
-                    else:
-                        continue
-        else:
-            pass
         cv.imshow('Replaced', self.frame)
+
+
+def smoothing_corners(filename, i):
+    data = pd.read_csv(filename, delimiter=';')
+    top_left = [data.iloc[i, 0], data.iloc[i, 1]]
+    bot_left = [data.iloc[i, 4], data.iloc[i, 5]]
+    bot_right = [data.iloc[i, 6], data.iloc[i, 7]]
+    top_right = [data.iloc[i, 2], data.iloc[i, 3]]
+    corners = [top_left, bot_left, bot_right, top_right]
+    return corners
 
 
 if __name__ == '__main__':
     banner_parameters_setting()
 
     frame_name = 'SET FRAME NAME'
-    open_cv_insertion = OpenCVLogoInsertion('SET TEMPLATE NAME', frame_name, 'SET LOGO NAME')
+    corners_preprocessed = False
+
+    if corners_preprocessed:
+        true_corners = smoothing_corners('SET PREPROCESSED CORNERS FILE PATH', i)
+    else:
+        true_corners = 0
+
+    open_cv_insertion = OpenCVLogoInsertion('SET TEMPLATE', frame_name, 'SET LOGO')
     open_cv_insertion.build_model('SET PARAMETERS')
-    cropped_frame, resized_banner_, banner_mask_cr_, switch_, f1 = open_cv_insertion.detect_banner(None)
-    open_cv_insertion.insert_logo(cropped_frame, resized_banner_, banner_mask_cr_, switch_)
+    cropped_frame, resized_banner_, banner_mask_cr_, switch_, f1 = open_cv_insertion.detect_banner(None, true_corners)
+    open_cv_insertion.insert_logo(resized_banner_, banner_mask_cr_)
 
     # Press 'Esc' to close the resulting frame
     key = cv.waitKey(0)

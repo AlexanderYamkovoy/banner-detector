@@ -2,6 +2,7 @@ import cv2 as cv
 import numpy as np
 from OpenCVLogoInsertion import OpenCVLogoInsertion
 from banner_parameters_setting import banner_parameters_setting
+import pandas as pd
 
 
 def frames_capture(video, show_details=False):
@@ -29,7 +30,23 @@ def frames_capture(video, show_details=False):
         else:
             capture.release()
     for i in range(0, frames_count):
-        cv.imwrite('SET FOLDER PATH TO PASTE FRAMES/frame{0}.jpg'.format(i), frames_list[i])
+        cv.imwrite('SET PATH FOR PASTING FRAMES'.format(i), frames_list[i])
+
+
+def smoothing_corners(filename, i):
+    """
+    This function return smoothed corners coordinates for corresponding frame
+    :param filename: file with smoothed corners
+    :param i: frame index
+    :return: smoothed corners coordinates
+    """
+    data = pd.read_csv(filename, delimiter=';')
+    top_left = [data.iloc[i, 0], data.iloc[i, 1]]
+    bot_left = [data.iloc[i, 4], data.iloc[i, 5]]
+    bot_right = [data.iloc[i, 6], data.iloc[i, 7]]
+    top_right = [data.iloc[i, 2], data.iloc[i, 3]]
+    true_corners = [top_left, bot_left, bot_right, top_right]
+    return true_corners
 
 
 def insert_logo_into_video(video, write_video=True, show_f1=False):
@@ -41,7 +58,7 @@ def insert_logo_into_video(video, write_video=True, show_f1=False):
     :param show_f1: True if need to calculate f1 score
     :return: mean value for f1 score
     """
-    additional_templates = ['SET TEMPLATE NAME', 'SET TEMPLATE NAME']
+    additional_templates = ['SET ADDITIONAL TEMPLATE NAME']
     banner_parameters_setting()
 
     capture = cv.VideoCapture(video)
@@ -50,32 +67,33 @@ def insert_logo_into_video(video, write_video=True, show_f1=False):
     frame_width = int(capture.get(3))
     frame_height = int(capture.get(4))
     four_cc = cv.VideoWriter_fourcc(*'MJPG')
-    out = cv.VideoWriter('SET RESULTING VIDEO NAME', four_cc, 30, (frame_width, frame_height), True)
+    out = cv.VideoWriter('RESULTING VIDEO NAME', four_cc, 30, (frame_width, frame_height), True)
 
     n = 0
     f1_list = []
     for i in range(frames_count - 1):
+        true_corners = smoothing_corners('SET PREPROCESSED CORNERS FILE PATH', i)
         ret, frame = capture.read()
 
         if ret:
             # frame_n = 'frame{}.jpg'.format(n)
-            open_cv_insertion = OpenCVLogoInsertion('SET BASE TEMPLATE NAME', frame, 'SET LOGO NAME')
+            open_cv_insertion = OpenCVLogoInsertion('SET TEMPLATE', frame, 'SET LOGO')
             open_cv_insertion.build_model('SET PARAMETERS')
-            cropped_frame, resized_banner, banner_mask_cr_, switch_, f1 = open_cv_insertion.detect_banner(None)
+            cropped_frame, resized_banner, frame_copy, switch_, f1\
+                = open_cv_insertion.detect_banner(None, true_corners)
 
             if switch_:
-                open_cv_insertion.insert_logo(cropped_frame, resized_banner, banner_mask_cr_, switch_)
+                open_cv_insertion.insert_logo(resized_banner, frame_copy)
 
             else:
                 for tmp in additional_templates:
-                    open_cv_insertion = OpenCVLogoInsertion(tmp, frame, 'SET LOGO NAME')
+                    open_cv_insertion = OpenCVLogoInsertion(tmp, frame, 'SET LOGO')
                     open_cv_insertion.build_model('SET PARAMETERS')
-                    cropped_frame, resized_banner, banner_mask_cr_, switch_, f1\
-                        = open_cv_insertion.detect_banner(None)
-
-                    open_cv_insertion.insert_logo(cropped_frame, resized_banner, banner_mask_cr_, switch_)
+                    cropped_frame, resized_banner, frame_copy, switch_, f1\
+                        = open_cv_insertion.detect_banner(None, true_corners)
 
                     if switch_:
+                        open_cv_insertion.insert_logo(resized_banner, frame_copy)
                         break
                     else:
                         continue
@@ -94,13 +112,12 @@ def insert_logo_into_video(video, write_video=True, show_f1=False):
             break
     capture.release()
     out.release()
-
     if len(f1_list) > 0:
         return np.mean(f1_list)
     else:
         pass
 
 
-# frames_capture('SET INPUT VIDEO NAME')
+# frames_capture('SET VIDEO NAME')
 
-insert_logo_into_video('SET INPUT VIDEO NAME')
+insert_logo_into_video('SET VIDEO NAME')
