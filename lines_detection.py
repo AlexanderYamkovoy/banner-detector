@@ -1,18 +1,23 @@
 import cv2 as cv
 import numpy as np
 import math
-from matplotlib import pyplot as plt
+import pandas as pd
 
 
 def detect_lines(image):
     gray = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
     hsv = cv.cvtColor(image, cv.COLOR_BGR2HSV)
+    # blur_gray = cv.GaussianBlur(gray, (3, 3), 0)
 
-    laplacian = cv.Laplacian(gray, cv.CV_64F, ksize=3)
-    laplacian = np.uint8(np.absolute(laplacian))
+    _, th = cv.threshold(gray, 0, 255, cv.THRESH_BINARY + cv.THRESH_OTSU)
+    # th = cv.adaptiveThreshold(gray, 255, cv.ADAPTIVE_THRESH_MEAN_C, cv.THRESH_BINARY, 11, 2)
+    # th = cv.adaptiveThreshold(blur_gray, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 11, 2)
 
-    sobely = cv.Sobel(gray, cv.CV_64F, 0, 1, ksize=3)
-    sobely = np.uint8(np.absolute(sobely))
+    # laplacian = cv.Laplacian(gray, cv.CV_64F, ksize=3)
+    # laplacian = np.uint8(np.absolute(laplacian))
+
+    # sobely = cv.Sobel(gray, cv.CV_64F, 0, 1, ksize=3)
+    # sobely = np.uint8(np.absolute(sobely))
 
     low_threshold = 30
     high_threshold = 60
@@ -39,43 +44,56 @@ def detect_lines(image):
     max_y = []
     for i in range(len(contours)):
         for point in contours[i]:
-            if point[0][0] == image.shape[1] - 1:
+            if point[0][0] == max_x:
                 max_y.append(point[0][1])
 
     max_y = np.min(max_y)
 
-    cv.circle(image, (min_x, min_y), 5, (0, 0, 255), 2)
-    cv.circle(image, (max_x, max_y), 5, (0, 0, 255), 2)
-
-    cv.line(image, (min_x, min_y), (max_x, max_y), (255, 0, 0), 2)
+    base_line_tangent = (max_y - min_y)/(max_x - min_x)
+    base_line_angle = math.degrees(math.atan(base_line_tangent))
 
     # for cnt in contours:
     #     cv.drawContours(image, [cnt], -1, (0, 255, 0), 2)
 
     rho = 1  # distance resolution in pixels of the Hough grid
     theta = np.pi / 180
-    threshold = 180  # minimum number of votes (intersections in Hough grid cell)
-    min_line_length = 150
+    threshold = 200  # minimum number of votes (intersections in Hough grid cell)
+    min_line_length = 200
     max_line_gap = 25  # maximum gap in pixels between connectible line segments
     line_image = np.copy(image) * 0
 
-    edges = cv.Canny(gray, low_threshold, high_threshold)
+    cv.circle(line_image, (min_x, min_y), 5, (0, 0, 255), 2)
+    cv.circle(line_image, (max_x, max_y), 5, (0, 0, 255), 2)
+
+    cv.line(line_image, (min_x, min_y), (max_x, max_y), (255, 0, 0), 2)
+
+    edges = cv.Canny(th, low_threshold, high_threshold)
 
     lines = cv.HoughLinesP(edges, rho, theta, threshold, np.array([]),
                            min_line_length, max_line_gap)
+
     for line in lines:
         for x1, y1, x2, y2 in line:
-            if y1 & y2 in range(min_y - 15, min_y + 50):
+
+            line_tangent = (y2 - y1) / (x2 - x1)
+            line_angle = math.degrees(math.atan(line_tangent))
+
+            # base_line_center = ((max_x - min_x) / 2, (max_y - min_y) / 2)
+
+            # dst = abs((y2 - y1) * base_line_center[0] - (x2 - x1) * base_line_center[1] + x2 * y1 - y2 * x1) /\
+                      # np.sqrt((y2 - y1)**2 + (x2 - x1)**2)
+
+            if abs(line_angle - base_line_angle) <= 0.35:
                 color = (np.random.randint(0, 256), np.random.randint(0, 256), np.random.randint(0, 256))
                 cv.line(line_image, (x1, y1), (x2, y2), color, 2)
 
     lines_edges = cv.addWeighted(image, 0.8, line_image, 1, 0)
-    return image
+    return lines_edges
 
 
-def build_model(video, img_path='Set path', files_folder_path='Set path'):
+def build_model(video, img_name='Set name', files_folder_path='Set path'):
     if not video:
-        img = cv.imread(img_path)
+        img = cv.imread(files_folder_path + img_name)
         lines = detect_lines(img)
         cv.imshow('result', lines)
         cv.imwrite(files_folder_path + 'single_line.png', lines)
@@ -87,7 +105,8 @@ def build_model(video, img_path='Set path', files_folder_path='Set path'):
         frame_width = int(capture.get(3))
         frame_height = int(capture.get(4))
         four_cc = cv.VideoWriter_fourcc(*'MJPG')
-        out = cv.VideoWriter(files_folder_path + 'single_line.avi', four_cc, 30, (frame_width, frame_height), True)
+        out = cv.VideoWriter(files_folder_path + 'lines no filter.avi',
+                             four_cc, 30, (frame_width, frame_height), True)
         while capture.isOpened():
             res, frame = capture.read()
             if res:
@@ -104,5 +123,6 @@ def build_model(video, img_path='Set path', files_folder_path='Set path'):
         out.release()
 
 
-folder = '/Users/oleksandr/Folder/WinStars/'
-build_model(False, folder + 'frame10.png', folder)
+folder = ''
+image_name = ''
+build_model(True, image_name, folder)
