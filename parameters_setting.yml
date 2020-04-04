@@ -1,10 +1,7 @@
-video_path: '/Users/oleksandr/Folder/superman/test.mp4'
-image_path: '/Users/oleksandr/Folder/superman/frame2210.png'
-template_path: '/Users/oleksandr/Folder/superman/1X_BET_2.png'
-kp_template: '/Users/oleksandr/Folder/superman/ff.png'
-dst_threshold: 0.7
-min_match_count: 20
-n_features: 10000
+kp_template: '/Users/oleksandr/Folder/superman/poster.png'
+dst_threshold: 0.75
+min_match_count: 40
+n_features: 100000
 rc_threshold: 5.0
 matcher:
   index_params:
