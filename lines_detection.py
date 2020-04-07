@@ -131,9 +131,9 @@ def build_model(video, img_name='Set name', files_folder_path='Set path'):
         frame_width = int(capture.get(3))
         frame_height = int(capture.get(4))
         four_cc = cv.VideoWriter_fourcc(*'MJPG')
-        out = cv.VideoWriter('shape detection.avi', four_cc, 30, (frame_width, frame_height), True)
+        out = cv.VideoWriter('shape_detection.avi', four_cc, 30, (frame_width, frame_height), True)
 
-        for i in range(27000):
+        for i in range(9000):
             _, frame = capture.read()
             # lines = detect_lines(frame)
             detect_shapes(frame)
