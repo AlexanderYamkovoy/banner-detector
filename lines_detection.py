@@ -105,12 +105,12 @@ def detect_shapes(image):
     th = cv.adaptiveThreshold(blur_gray, 255, cv.ADAPTIVE_THRESH_MEAN_C, cv.THRESH_BINARY, 11, 2)
     # th = cv.adaptiveThreshold(blur_gray, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 11, 2)
 
-    edges = cv.Canny(blur_gray, low_threshold, high_threshold)
+    # edges = cv.Canny(blur_gray, low_threshold, high_threshold)
 
     _, contours, __ = cv.findContours(th, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
 
-    drop_list = [i for i in range(len(contours)) if cv.contourArea(contours[i]) < area_threshold]
-    contours = [i for j, i in enumerate(contours) if j not in drop_list]
+    # drop_list = [i for i in range(len(contours)) if cv.contourArea(contours[i]) < area_threshold]
+    # contours = [i for j, i in enumerate(contours) if j not in drop_list]
 
     for cnt in contours:
         cv.drawContours(image, [cnt], -1, (0, 255, 0), 2)
@@ -127,23 +127,22 @@ def build_model(video, img_name='Set name', files_folder_path='Set path'):
         if key == 27:
             cv.destroyAllWindows()
     else:
-        capture = cv.VideoCapture('')
+        capture = cv.VideoCapture('/home/worker/Shape_Detector/Avengers.mkv')
         frame_width = int(capture.get(3))
         frame_height = int(capture.get(4))
         four_cc = cv.VideoWriter_fourcc(*'MJPG')
-        out = cv.VideoWriter('lines no filter.avi', four_cc, 30, (frame_width, frame_height), True)
-        while capture.isOpened():
-            res, frame = capture.read()
-            if res:
-                lines = detect_lines(frame)
-                detect_shapes(frame)
-                cv.imshow('result', frame)
-                out.write(frame)
-                key = cv.waitKey(1)
-                if key == 27:
-                    break
-            else:
-                break
+        out = cv.VideoWriter('shape detection.avi', four_cc, 30, (frame_width, frame_height), True)
+
+        for i in range(27000):
+            _, frame = capture.read()
+            # lines = detect_lines(frame)
+            detect_shapes(frame)
+            # cv.imshow('result', frame)
+            out.write(frame)
+
+            '''key = cv.waitKey(1)
+            if key == 27:
+                break'''
 
         capture.release()
         out.release()
@@ -151,4 +150,5 @@ def build_model(video, img_name='Set name', files_folder_path='Set path'):
 
 folder = ''
 image_name = 'frame10.png'
-# build_model(True, image_name, folder)
+
+build_model(True, image_name, folder)
