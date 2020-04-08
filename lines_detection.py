@@ -94,29 +94,35 @@ def detect_lines(image):
 def detect_shapes(image):
 
     kernel = 5
-    low_threshold = 30
-    high_threshold = 60
-    area_threshold = 2500
+    min_area_threshold = 2000
+    max_area_threshold = 50000
+    perimeter_threshold = 0.035
 
     gray = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
     blur_gray = cv.GaussianBlur(gray, (kernel, kernel), 0)
 
-    # _, th = cv.threshold(blur_gray, 0, 255, cv.THRESH_BINARY + cv.THRESH_OTSU)
-    th = cv.adaptiveThreshold(blur_gray, 255, cv.ADAPTIVE_THRESH_MEAN_C, cv.THRESH_BINARY, 11, 2)
+    _, th = cv.threshold(blur_gray, 0, 255, cv.THRESH_BINARY + cv.THRESH_OTSU)
+    # th = cv.adaptiveThreshold(blur_gray, 255, cv.ADAPTIVE_THRESH_MEAN_C, cv.THRESH_BINARY, 21, 2)
     # th = cv.adaptiveThreshold(blur_gray, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 11, 2)
 
-    # edges = cv.Canny(blur_gray, low_threshold, high_threshold)
+    _, contours, __ = cv.findContours(th, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
 
-    _, contours, __ = cv.findContours(th, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
-
-    # drop_list = [i for i in range(len(contours)) if cv.contourArea(contours[i]) < area_threshold]
-    # contours = [i for j, i in enumerate(contours) if j not in drop_list]
+    drop_list = [i for i in range(len(contours))
+                 if cv.contourArea(contours[i]) < min_area_threshold
+                 or cv.contourArea(contours[i]) > max_area_threshold]
+    contours = [i for j, i in enumerate(contours) if j not in drop_list]
 
     for cnt in contours:
-        cv.drawContours(image, [cnt], -1, (0, 255, 0), 2)
+        epsilon = perimeter_threshold * cv.arcLength(cnt, True)
+        approx = cv.approxPolyDP(cnt, epsilon, True)
+        convexity = cv.isContourConvex(approx)
+        corners_count = len(approx)
+
+        if convexity and corners_count == 4:
+            cv.drawContours(image, [approx], -1, (0, 255, 0), 2)
 
 
-def build_model(video, img_name='Set name', files_folder_path='Set path'):
+def build_model(video, img_name='Set name', results_folder='Set path'):
     if not video:
         img = cv.imread(files_folder_path + img_name)
         # lines = detect_lines(img)
@@ -127,29 +133,30 @@ def build_model(video, img_name='Set name', files_folder_path='Set path'):
         if key == 27:
             cv.destroyAllWindows()
     else:
-        capture = cv.VideoCapture('/home/worker/Shape_Detector/Avengers.mkv')
+        capture = cv.VideoCapture(results_folder + 'Avengers.mkv')
         frame_width = int(capture.get(3))
         frame_height = int(capture.get(4))
-        four_cc = cv.VideoWriter_fourcc(*'X264')
-        out = cv.VideoWriter('/home/worker/Shape_Detector/shape_detection2.avi',
-                             four_cc, 30, (frame_width, frame_height), True)
+        four_cc = cv.VideoWriter_fourcc(*'FMP4')  # XVID FMP4 X264
+        frames_count = int(capture.get(cv.CAP_PROP_FRAME_COUNT))
+        fps = capture.get(cv.CAP_PROP_FPS)
+        out = cv.VideoWriter(results_folder + 'results/detect_quadrilaterals.avi',
+                             four_cc, fps, (frame_width, frame_height), True)
 
-        for i in range(9000):
+        for i in range(frames_count):
             _, frame = capture.read()
-            # lines = detect_lines(frame)
             detect_shapes(frame)
             # cv.imshow('result', frame)
             out.write(frame)
 
-            '''key = cv.waitKey(1)
-            if key == 27:
-                break'''
+            # key = cv.waitKey(1)
+            # if key == 27:
+            #     break
 
         capture.release()
         out.release()
 
 
-folder = ''
-image_name = 'frame10.png'
+folder = '/home/worker/Shape_Detector/'
+image_name = ''
 
 build_model(True, image_name, folder)
