@@ -240,7 +240,7 @@ def execution(video, img_path, video_path='Set path', preprocessing=True):
         four_cc = cv.VideoWriter_fourcc(*'FMP4')  # XVID FMP4 X264
         frames_count = int(capture.get(cv.CAP_PROP_FRAME_COUNT))
         fps = capture.get(cv.CAP_PROP_FPS)
-        out = cv.VideoWriter('/home/worker/Shape_Detector/results/draw_quadrilaterals.avi',
+        out = cv.VideoWriter('/home/worker/Shape_Detector/results/draw_quadrilaterals_fragments.avi',
                              four_cc, fps, (frame_width, frame_height), True)
         if preprocessing:
             columns = ['frame', 'x1', 'y1', 'x2', 'y2', 'x3', 'y3', 'x4', 'y4']
@@ -263,9 +263,10 @@ def execution(video, img_path, video_path='Set path', preprocessing=True):
             if i in frames_ranges:
                 print('Processing frame {}'.format(i))
                 drawing_contours('data.csv', i, frame)
+                out.write(frame)
 
             # cv.imshow('frame', frame)
-            out.write(frame)
+            # out.write(frame)
 
             # key = cv.waitKey(1)
             # if key == 27:
