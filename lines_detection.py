@@ -200,7 +200,6 @@ def data_cleaning(df, min_frames_quantity, file):
         if i == len(idx_counter) - 1:
             final_frames.append([(idx_counter[i - 1][0] + 1) - idx_counter[i - 1][1],
                                  idx_counter[i - 1][0] + 2])
-
     fragments = []
     for fragment in final_frames:
         file.write('Captured fragment: {}\n'.format(fragment))
@@ -217,12 +216,21 @@ def data_cleaning(df, min_frames_quantity, file):
 def drawing_contours(csv, idx_frame, frame):
     data = pd.read_csv(csv)
 
-    for i, _ in data.iterrows():
-        if data.frame[i] == idx_frame:
-            contour = [[[data.x1[i], data.y1[i]]], [[data.x2[i], data.y2[i]]],
-                       [[data.x3[i], data.y3[i]]], [[data.x4[i], data.y4[i]]]]
-            contour = np.array(contour)
-            cv.drawContours(frame, [contour], -1, (0, 255, 0), 2)
+    required_data = data[data.frame == idx_frame]
+    for i, _ in required_data.iterrows():
+        contour = [[[required_data.x1[i], required_data.y1[i]]],
+                   [[required_data.x2[i], required_data.y2[i]]],
+                   [[required_data.x3[i], required_data.y3[i]]],
+                   [[required_data.x4[i], required_data.y4[i]]]]
+        contour = np.array(contour)
+        cv.drawContours(frame, [contour], -1, (0, 255, 0), 2)
+
+    # for i, _ in data.iterrows():
+    #     if data.frame[i] == idx_frame:
+    #         contour = [[[data.x1[i], data.y1[i]]], [[data.x2[i], data.y2[i]]],
+    #                    [[data.x3[i], data.y3[i]]], [[data.x4[i], data.y4[i]]]]
+    #         contour = np.array(contour)
+    #         cv.drawContours(frame, [contour], -1, (0, 255, 0), 2)
 
 
 def execution(video, img_path, video_path='Set path', preprocessing=True):
@@ -277,8 +285,9 @@ def execution(video, img_path, video_path='Set path', preprocessing=True):
 
 
 folder = '/home/worker/Shape_Detector/Avengers.mkv'
+local_video_path = '/Users/oleksandr/Folder/WinStars/avengers.mp4'
 image_name = 'frame434.png'
 
 start_time = time.time()
-execution(True, image_name, folder, False)
+execution(True, image_name, folder)
 print("--- %s seconds ---" % (time.time() - start_time))
