@@ -1,0 +1,6 @@
+Frames count: 9044
+FPS amount: 30.0
+Captured fragment: [1450, 1519]
+Captured fragment: [4453, 4514]
+Captured fragment: [7416, 7490]
+Captured fragment: [8528, 8847]

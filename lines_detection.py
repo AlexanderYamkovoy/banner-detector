@@ -289,5 +289,5 @@ local_video_path = '/Users/oleksandr/Folder/WinStars/avengers.mp4'
 image_name = 'frame434.png'
 
 start_time = time.time()
-execution(True, image_name, folder)
+execution(True, image_name, folder, False)
 print("--- %s seconds ---" % (time.time() - start_time))
