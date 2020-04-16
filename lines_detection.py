@@ -200,13 +200,20 @@ def data_cleaning(df, min_frames_quantity, file):
         if i == len(idx_counter) - 1:
             final_frames.append([(idx_counter[i - 1][0] + 1) - idx_counter[i - 1][1],
                                  idx_counter[i - 1][0] + 2])
+
     fragments = []
     for fragment in final_frames:
         file.write('Captured fragment: {}\n'.format(fragment))
         fragments.append(np.arange(fragment[0], fragment[1] + 1))
 
+    # fragments_list = [1, 2, 9, 15, 40, 48, 70, 73, 74, 76, 79, 94, 111, 117, 121]
+    # res_fragments = []
+    # for idx, fragment in enumerate(fragments):
+    #     if idx in fragments_list:
+    #         res_fragments.append(fragment)
+
     idx_list = []
-    for fragment in fragments:
+    for fragment in res_fragments:
         for idx in fragment:
             idx_list.append(idx)
 
@@ -217,20 +224,44 @@ def drawing_contours(csv, idx_frame, frame):
     data = pd.read_csv(csv)
 
     required_data = data[data.frame == idx_frame]
+    cnt_corners = []
     for i, _ in required_data.iterrows():
-        contour = [[[required_data.x1[i], required_data.y1[i]]],
-                   [[required_data.x2[i], required_data.y2[i]]],
-                   [[required_data.x3[i], required_data.y3[i]]],
-                   [[required_data.x4[i], required_data.y4[i]]]]
-        contour = np.array(contour)
-        cv.drawContours(frame, [contour], -1, (0, 255, 0), 2)
+        contour = np.array([[[required_data.x1[i], required_data.y1[i]]],
+                           [[required_data.x2[i], required_data.y2[i]]],
+                           [[required_data.x3[i], required_data.y3[i]]],
+                           [[required_data.x4[i], required_data.y4[i]]]])
+        contour.view('i8,i8').sort(order=['f0'], axis=0)
 
-    # for i, _ in data.iterrows():
-    #     if data.frame[i] == idx_frame:
-    #         contour = [[[data.x1[i], data.y1[i]]], [[data.x2[i], data.y2[i]]],
-    #                    [[data.x3[i], data.y3[i]]], [[data.x4[i], data.y4[i]]]]
-    #         contour = np.array(contour)
-    #         cv.drawContours(frame, [contour], -1, (0, 255, 0), 2)
+        left_side = contour[:2]
+        right_side = contour[2:]
+
+        left_idx_max = np.ravel(np.argmax(left_side, axis=0))[1]
+        left_idx_min = np.ravel(np.argmin(left_side, axis=0))[1]
+        right_idx_max = np.ravel(np.argmax(right_side, axis=0))[1]
+        right_idx_min = np.ravel(np.argmin(right_side, axis=0))[1]
+
+        top_left = left_side[left_idx_min].tolist()[0]
+        bot_left = left_side[left_idx_max].tolist()[0]
+        top_right = right_side[right_idx_min].tolist()[0]
+        bot_right = right_side[right_idx_max].tolist()[0]
+        cnt_corners.append([top_left, bot_left, bot_right, top_right])
+
+        cv.drawContours(frame, [contour], -1, (0, 255, 0), 2)
+    return cnt_corners
+
+
+def transform_logo(logo, frame, corners):
+    logo = cv.imread(logo)
+
+    frame_h, frame_w, _ = frame.shape
+    h, w, _ = logo.shape
+
+    pts1 = np.float32([(0, 0), (0, (h - 1)), ((w - 1), (h - 1)), ((w - 1), 0)])
+    pts2 = np.float32([corners[0], corners[1], corners[2], corners[3]])
+
+    matrix = cv.getPerspectiveTransform(pts1, pts2)
+    logo = cv.warpPerspective(logo, matrix, (frame_w, frame_h), borderMode=1)
+    return logo
 
 
 def execution(video, img_path, video_path='Set path', preprocessing=True):
@@ -248,8 +279,8 @@ def execution(video, img_path, video_path='Set path', preprocessing=True):
         four_cc = cv.VideoWriter_fourcc(*'FMP4')  # XVID FMP4 X264
         frames_count = int(capture.get(cv.CAP_PROP_FRAME_COUNT))
         fps = capture.get(cv.CAP_PROP_FPS)
-        out = cv.VideoWriter('/home/worker/Shape_Detector/results/draw_quadrilaterals_fragments.avi',
-                             four_cc, fps, (frame_width, frame_height), True)
+        # out = cv.VideoWriter('draw_quadrilaterals_fragments.avi',
+        #                      four_cc, fps, (frame_width, frame_height), True)
         if preprocessing:
             columns = ['frame', 'x1', 'y1', 'x2', 'y2', 'x3', 'y3', 'x4', 'y4']
             data = pd.DataFrame(columns=columns)
@@ -264,14 +295,14 @@ def execution(video, img_path, video_path='Set path', preprocessing=True):
         with open('report.txt', 'w') as f:
             f.write('Frames count: {}\n'.format(frames_count))
             f.write('FPS amount: {}\n'.format(fps))
-            frames_ranges = data_cleaning('data.csv', 90, f)
+            frames_ranges = data_cleaning('data.csv', 60, f)
 
         for i in range(frames_count):
             _, frame = capture.read()
             if i in frames_ranges:
                 print('Processing frame {}'.format(i))
                 drawing_contours('data.csv', i, frame)
-                out.write(frame)
+                # out.write(frame)
 
             # cv.imshow('frame', frame)
             # out.write(frame)
@@ -281,7 +312,7 @@ def execution(video, img_path, video_path='Set path', preprocessing=True):
             #     break
 
         capture.release()
-        out.release()
+        # out.release()
 
 
 folder = '/home/worker/Shape_Detector/Avengers.mkv'
@@ -289,5 +320,6 @@ local_video_path = '/Users/oleksandr/Folder/WinStars/avengers.mp4'
 image_name = 'frame434.png'
 
 start_time = time.time()
-execution(True, image_name, folder, False)
+execution(True, image_name, local_video_path, False)
 print("--- %s seconds ---" % (time.time() - start_time))
+
