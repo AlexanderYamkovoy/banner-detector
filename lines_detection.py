@@ -3,6 +3,7 @@ import numpy as np
 import math
 import pandas as pd
 import time
+from skimage.exposure import match_histograms
 
 
 def detect_lines(image):
@@ -213,7 +214,7 @@ def data_cleaning(df, min_frames_quantity, file):
     #         res_fragments.append(fragment)
 
     idx_list = []
-    for fragment in res_fragments:
+    for fragment in fragments:
         for idx in fragment:
             idx_list.append(idx)
 
@@ -225,11 +226,16 @@ def drawing_contours(csv, idx_frame, frame):
 
     required_data = data[data.frame == idx_frame]
     cnt_corners = []
+    cnt_min_max = []
     for i, _ in required_data.iterrows():
         contour = np.array([[[required_data.x1[i], required_data.y1[i]]],
                            [[required_data.x2[i], required_data.y2[i]]],
                            [[required_data.x3[i], required_data.y3[i]]],
                            [[required_data.x4[i], required_data.y4[i]]]])
+
+        x_min, y_min = np.amin(contour, axis=0)[0], np.amin(contour, axis=0)[1]
+        x_max, y_max = np.amax(contour, axis=0)[0], np.amax(contour, axis=0)[1]
+        cnt_min_max.append([y_min, y_max, x_min, x_max])
         contour.view('i8,i8').sort(order=['f0'], axis=0)
 
         left_side = contour[:2]
@@ -244,13 +250,13 @@ def drawing_contours(csv, idx_frame, frame):
         bot_left = left_side[left_idx_max].tolist()[0]
         top_right = right_side[right_idx_min].tolist()[0]
         bot_right = right_side[right_idx_max].tolist()[0]
-        cnt_corners.append([top_left, bot_left, bot_right, top_right])
+        cnt_corners.append([[top_left], [bot_left], [bot_right], [top_right]])
 
         cv.drawContours(frame, [contour], -1, (0, 255, 0), 2)
-    return cnt_corners
+    return cnt_corners, cnt_min_max
 
 
-def transform_logo(logo, frame, corners):
+def transform_logo(logo, frame, corners, min_max):
     logo = cv.imread(logo)
 
     frame_h, frame_w, _ = frame.shape
@@ -261,6 +267,11 @@ def transform_logo(logo, frame, corners):
 
     matrix = cv.getPerspectiveTransform(pts1, pts2)
     logo = cv.warpPerspective(logo, matrix, (frame_w, frame_h), borderMode=1)
+
+    matched = match_histograms(logo[min_max[0]:min_max[1], min_max[2]:min_max[3]],
+                               frame[min_max[0]:min_max[1], min_max[2]:min_max[3]], multichannel=True)
+    logo[min_max[0]:min_max[1], min_max[2]:min_max[3]] = matched
+
     return logo
 
 
