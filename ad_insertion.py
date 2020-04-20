@@ -120,12 +120,6 @@ def data_cleaning(df, min_frames_quantity, file):
         file.write('Captured fragment: {}\n'.format(fragment))
         fragments.append(np.arange(fragment[0], fragment[1] + 1))
 
-    # fragments_list = [1, 2, 9, 15, 40, 48, 70, 73, 74, 76, 79, 94, 111, 117, 121]
-    # res_fragments = []
-    # for idx, fragment in enumerate(fragments):
-    #     if idx in fragments_list:
-    #         res_fragments.append(fragment)
-
     idx_list = []
     for fragment in fragments:
         for idx in fragment:
@@ -188,55 +182,47 @@ def transform_logo(logo, frame, corners, min_max):
     return logo
 
 
-def execution(video, img_path, video_path='Set path', preprocessing=True):
-    if not video:
-        img = cv.imread(img_path)
-        cnt = detect_shapes(img)
-        cv.imshow('result', img)
-        key = cv.waitKey(0)
-        if key == 27:
-            cv.destroyAllWindows()
-    else:
-        capture = cv.VideoCapture(video_path)
-        frame_width = int(capture.get(3))
-        frame_height = int(capture.get(4))
-        four_cc = cv.VideoWriter_fourcc(*'FMP4')  # XVID FMP4 X264
-        frames_count = int(capture.get(cv.CAP_PROP_FRAME_COUNT))
-        fps = capture.get(cv.CAP_PROP_FPS)
-        # out = cv.VideoWriter('draw_quadrilaterals_fragments.avi',
-        #                      four_cc, fps, (frame_width, frame_height), True)
-        if preprocessing:
-            columns = ['frame', 'x1', 'y1', 'x2', 'y2', 'x3', 'y3', 'x4', 'y4']
-            data = pd.DataFrame(columns=columns)
-            row_idx = 0
-
-            for i in range(frames_count):
-                _, frame = capture.read()
-                contours = data_collection(frame)
-                row_idx = data_preprocessed(contours, i, data, row_idx)
-            data.to_csv('data.csv', index=False)
-
-        with open('report.txt', 'w') as f:
-            f.write('Frames count: {}\n'.format(frames_count))
-            f.write('FPS amount: {}\n'.format(fps))
-            frames_ranges = data_cleaning('data.csv', 60, f)
+def execution(video_path='Set path', preprocessing=True):
+    capture = cv.VideoCapture(video_path)
+    frame_width = int(capture.get(3))
+    frame_height = int(capture.get(4))
+    four_cc = cv.VideoWriter_fourcc(*'FMP4')  # XVID FMP4 X264
+    frames_count = int(capture.get(cv.CAP_PROP_FRAME_COUNT))
+    fps = capture.get(cv.CAP_PROP_FPS)
+    # out = cv.VideoWriter('draw_quadrilaterals_fragments.avi',
+    #                      four_cc, fps, (frame_width, frame_height), True)
+    if preprocessing:
+        columns = ['frame', 'x1', 'y1', 'x2', 'y2', 'x3', 'y3', 'x4', 'y4']
+        data = pd.DataFrame(columns=columns)
+        row_idx = 0
 
         for i in range(frames_count):
             _, frame = capture.read()
-            if i in frames_ranges:
-                print('Processing frame {}'.format(i))
-                drawing_contours('data.csv', i, frame)
-                # out.write(frame)
+            contours = data_collection(frame)
+            row_idx = data_preprocessed(contours, i, data, row_idx)
+        data.to_csv('data.csv', index=False)
 
-            # cv.imshow('frame', frame)
+    with open('report.txt', 'w') as f:
+        f.write('Frames count: {}\n'.format(frames_count))
+        f.write('FPS amount: {}\n'.format(fps))
+        frames_ranges = data_cleaning('data.csv', 60, f)
+
+    for i in range(frames_count):
+        _, frame = capture.read()
+        if i in frames_ranges:
+            print('Processing frame {}'.format(i))
+            drawing_contours('data.csv', i, frame)
             # out.write(frame)
 
-            # key = cv.waitKey(1)
-            # if key == 27:
-            #     break
+        # cv.imshow('frame', frame)
+        # out.write(frame)
 
-        capture.release()
-        # out.release()
+        # key = cv.waitKey(1)
+        # if key == 27:
+        #     break
+
+    capture.release()
+    # out.release()
 
 
 folder = '/home/worker/Shape_Detector/Avengers.mkv'
@@ -244,6 +230,6 @@ local_video_path = '/Users/oleksandr/Folder/WinStars/avengers.mp4'
 image_name = 'frame434.png'
 
 start_time = time.time()
-execution(True, image_name, local_video_path, False)
+execution(local_video_path, False)
 print("--- %s seconds ---" % (time.time() - start_time))
 
