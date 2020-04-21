@@ -5,23 +5,19 @@ import pandas as pd
 import time
 from skimage.exposure import match_histograms
 from AbstractAdInsertion import AbstractAdInsertion
+import yaml
 
 
 class AdInsertion(AbstractAdInsertion):
-    def __init__(self, frame, logo, data, row_idx, frame_idx):
+    def __init__(self, frame, logo, frame_idx, data):
         self.frame = frame
         self.logo = logo
         self.contours = []
         self.data = data
-        self.row_idx = row_idx
         self.frame_idx = frame_idx
+        self.config = {}
 
-    def contours_finding(self):
-        kernel = 5
-        min_area_threshold = 2000
-        max_area_threshold = 80000
-        perimeter_threshold = 0.035
-        corners_count = 4
+    def __contours_finding(self, kernel, min_area, max_area, corners_count, perimeter_threshold):
         gray = cv.cvtColor(self.frame, cv.COLOR_BGR2GRAY)
         blur_gray = cv.GaussianBlur(gray, (kernel, kernel), 0)
 
@@ -29,8 +25,8 @@ class AdInsertion(AbstractAdInsertion):
         _, contours, __ = cv.findContours(th, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
 
         drop_list = [i for i in range(len(contours))
-                     if cv.contourArea(contours[i]) < min_area_threshold
-                     or cv.contourArea(contours[i]) > max_area_threshold]
+                     if cv.contourArea(contours[i]) < min_area
+                     or cv.contourArea(contours[i]) > max_area]
         contours = [i for j, i in enumerate(contours) if j not in drop_list]
 
         for cnt in contours:
@@ -42,14 +38,13 @@ class AdInsertion(AbstractAdInsertion):
             if convexity and corners == corners_count:
                 self.contours.append(approx.tolist())
 
-    def data_preprocessed(self):
+    def __data_preprocessed(self):
 
         if self.contours != 0:
             for i, v in enumerate(self.contours):
-                self.data.loc[self.row_idx] = self.frame_idx, \
-                                    v[0][0][0], v[0][0][1], v[1][0][0], v[1][0][1], \
-                                    v[2][0][0], v[2][0][1], v[3][0][0], v[3][0][1]
-                self.row_index += 1
+                self.data.append([self.frame_idx,
+                                  v[0][0][0], v[0][0][1], v[1][0][0], v[1][0][1],
+                                  v[2][0][0], v[2][0][1], v[3][0][0], v[3][0][1]])
 
     def data_cleaning(self, df, file):
         data = pd.read_csv(df)
@@ -145,3 +140,15 @@ class AdInsertion(AbstractAdInsertion):
         logo[min_max[0]:min_max[1], min_max[2]:min_max[3]] = matched
 
         return logo
+
+    def build_model(self, filename):
+        with open(filename, 'r') as stream:
+            self.config = yaml.safe_load(stream)
+
+    def data_preprocessed(self):
+        cfg = self.config
+        self.__contours_finding(cfg['kernel'], cfg['min_area_threshold'],
+                                cfg['max_area_threshold'], cfg['corners_count'],
+                                cfg['perimeter_threshold'])
+        self.__data_preprocessed()
+

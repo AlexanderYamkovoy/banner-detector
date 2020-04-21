@@ -7,6 +7,10 @@ class AbstractAdInsertion(ABC):
         pass
 
     @abstractmethod
+    def data_preprocessed(self):
+        pass
+
+    @abstractmethod
     def detect_surfaces(self):
         pass
 
