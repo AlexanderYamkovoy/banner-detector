@@ -1,6 +1,0 @@
-kernel: 5
-min_area_threshold: 2000
-max_area_threshold: 80000
-perimeter_threshold: 0.035
-corners_count: 4
-idx_counter: 60
