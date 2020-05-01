@@ -159,9 +159,7 @@ class AdInsertion(AbstractAdInsertion):
             for i in range(1, 9):
                 field[:, i] = savgol_filter(field[:, i], window, poly_order)
 
-        contours_amount = len(self.stable_contours)
         self.stable_contours = np.array([item for sublist in self.stable_contours for item in sublist])
-        return contours_amount
 
     def __transform_logo(self, contours):
         """
@@ -212,8 +210,7 @@ class AdInsertion(AbstractAdInsertion):
         self.__data_cleaning(cfg['field_threshold'], cfg['contour_threshold'],
                              cfg['dst_threshold'])
         self.__define_contour_orientation()
-        contours_amount = self.__smooth_coordinates(cfg['window'], cfg['poly_order'])
-        return contours_amount
+        self.__smooth_coordinates(cfg['window'], cfg['poly_order'])
 
     def insert_ad(self, contours):
         """

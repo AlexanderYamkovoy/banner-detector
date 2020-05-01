@@ -41,25 +41,27 @@ class ProcessingResource(Resource):
         logo_filename = secure_filename(logo.filename)
         video_filename = secure_filename(video.filename)
 
-        logo_path = app.files_path / logo_filename
-        video_path = app.files_path / video_filename
-        report_path = app.files_path / f'{video_filename}_report.txt'
+        logo_path = str(app.files_path / logo_filename)
+        video_path = str(app.files_path / video_filename)
 
         logo.save(logo_path)
         video.save(video_path)
 
-        with open(str(report_path), 'w') as report_file:
-            # TODO: rewrite video file instead of writing the result to 'result.avi'
+        video_name = ad_insertion_executor(video_path, logo_path, str(app.conf_path))
 
-            ad_insertion_executor(str(video_path), str(logo_path), str(app.conf_path), report_file)
-
-        return send_from_directory(app.files_path, video_filename)
+        return send_from_directory(app.root_path,
+                                   video_name,
+                                   as_attachment=True,
+                                   attachment_filename=video_name)
 
 
 @api.route('/processing/<path:filename>')
 class ProcessingInstanceResource(Resource):
     @staticmethod
-    def get(filename: str) -> list:
+    def get(filename: str):
         """ Get file by name """
 
-        return send_from_directory(app.files_path, filename)
+        return send_from_directory(app.files_path,
+                                   filename,
+                                   as_attachment=True,
+                                   attachment_filename=filename)

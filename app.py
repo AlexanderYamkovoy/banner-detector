@@ -19,10 +19,13 @@ class AdvApp(Flask):
             self.files_path.mkdir()
 
         self.conf_path = self.root_path / settings.conf_path
+        self.default_conf_path = self.root_path / settings.default_conf_path
         self.config['model_config'] = self.load_conf()
 
     def load_conf(self) -> dict:
-        with open(self.conf_path) as file:
+        path = self.default_conf_path if not self.conf_path.is_file() else self.conf_path
+
+        with open(path) as file:
             return yaml.load(file, Loader=yaml.FullLoader)
 
     def save_conf(self) -> None:
