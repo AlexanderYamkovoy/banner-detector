@@ -74,7 +74,7 @@ class AdInsertion(AbstractAdInsertion):
         :param dst_threshold: distance between contours centers
         :return:
         """
-        data = np.load('data/data.npy')
+        data = np.load('files/data.npy')
         unique_idx = np.unique(data[:, 0])
         first_frame = unique_idx[0]
         last_frame = unique_idx[-1]

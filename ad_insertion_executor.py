@@ -10,7 +10,6 @@ def ad_insertion_executor(video_path, logo, config):
     :param video_path: video path
     :param logo: logo path
     :param config: config path
-    :param file: report path
     :return:
     """
     capture = cv.VideoCapture(video_path)
@@ -31,7 +30,7 @@ def ad_insertion_executor(video_path, logo, config):
         ad_insertion.build_model(config)
         ad_insertion.data_preprocessed()
     data = np.array(data)
-    np.save('data/data.npy', data)
+    np.save('files/data.npy', data)
     capture.release()
     print('Preprocessing completed.')
 
